@@ -96,6 +96,8 @@
     url = [NSURL URLWithString:urlStr];
     request = [NSMutableURLRequest requestWithURL:url cachePolicy:NSURLRequestUseProtocolCachePolicy timeoutInterval:3600];
     
+    //Check commit
+    
     operation = [[AFDownloadRequestOperation alloc] initWithRequest:request targetPath:MUSICFile1 shouldResume:YES];
     
     [operation setCompletionBlockWithSuccess:^(AFHTTPRequestOperation *operation, id responseObject) {
