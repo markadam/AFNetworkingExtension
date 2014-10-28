@@ -38,7 +38,8 @@
  If the target is a directory, we use the last part of the URL as a default file name.
  */
 @property (strong) NSString *targetPath;
-
+@property (strong) NSString *downloadFileIndex;
++ (NSString *)md5StringForString:(NSString *)string;
 /** 
  A Boolean value that indicates if we should try to resume the download. Defaults is `YES`.
 
