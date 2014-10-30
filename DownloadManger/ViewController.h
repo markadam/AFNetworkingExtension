@@ -9,6 +9,7 @@
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import <MediaPlayer/MediaPlayer.h>
-#import "AudioPlayer.h"
-@interface ViewController : UIViewController
+#import "DownloadManager.h"
+
+@interface ViewController : UIViewController<DowloadManagerDelegate>
 @end

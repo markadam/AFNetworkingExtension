@@ -76,11 +76,11 @@ static NSString * AFStringFromIndexSet(NSIndexSet *indexSet) {
         }
 
         if (range.length == 1) {
-            [string appendFormat:@"%u", range.location];
+            [string appendFormat:@"%lu", (unsigned long)range.location];
         } else {
             NSUInteger firstIndex = range.location;
             NSUInteger lastIndex = firstIndex + range.length - 1;
-            [string appendFormat:@"%u-%u", firstIndex, lastIndex];
+            [string appendFormat:@"%lu-%lu", (unsigned long)firstIndex, (unsigned long)lastIndex];
         }
 
         range.location = nextIndex;
@@ -137,6 +137,9 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
         dispatch_release(_failureCallbackQueue); 
         _failureCallbackQueue = NULL;
     }
+    #if !__has_feature(objc_arc)
+        [super dealloc];
+    #endif
 }
 
 - (NSError *)error {

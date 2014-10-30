@@ -1,5 +1,5 @@
 //
-// Prefix header for all source files of the 'AFResumingDownload' target in the 'AFResumingDownload' project
+// Prefix header for all source files of the 'DownloadManger' target in the 'DownloadManger' project
 //
 
 #import <Availability.h>

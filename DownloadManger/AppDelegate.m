@@ -1,6 +1,6 @@
 //
 //  AppDelegate.m
-//  AFResumingDownload
+//  DownloadManger
 //
 //  Created by sban@netspectrum.com on 9/21/12.
 //  Copyright (c) 2012 Netspectrum Inc. All rights reserved.
@@ -21,9 +21,6 @@
     // Override point for customization after application launch.
     self.viewController = [[ViewController alloc] initWithNibName:@"ViewController" bundle:nil];
     self.window.rootViewController = self.viewController;
-    //支持avaudioplayer播放
-    AVAudioSession *session = [AVAudioSession sharedInstance];
-    [session setCategory:AVAudioSessionCategoryPlayback error:nil];
     
     [self.window makeKeyAndVisible];
     return YES;

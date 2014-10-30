@@ -1,6 +1,6 @@
 //
 //  main.m
-//  AFResumingDownload
+//  DownloadManger
 //
 //  Created by sban@netspectrum.com on 9/21/12.
 //  Copyright (c) 2012 Netspectrum Inc. All rights reserved.

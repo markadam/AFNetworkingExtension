@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "8CCCE4F7160C54B100317D4C"
-               BuildableName = "AFResumingDownload.app"
-               BlueprintName = "AFResumingDownload"
-               ReferencedContainer = "container:AFResumingDownload.xcodeproj">
+               BuildableName = "DownloadManager.app"
+               BlueprintName = "DownloadManager"
+               ReferencedContainer = "container:DownloadManager.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8CCCE4F7160C54B100317D4C"
-            BuildableName = "AFResumingDownload.app"
-            BlueprintName = "AFResumingDownload"
-            ReferencedContainer = "container:AFResumingDownload.xcodeproj">
+            BuildableName = "DownloadManager.app"
+            BlueprintName = "DownloadManager"
+            ReferencedContainer = "container:DownloadManager.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
    </TestAction>
@@ -52,9 +52,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8CCCE4F7160C54B100317D4C"
-            BuildableName = "AFResumingDownload.app"
-            BlueprintName = "AFResumingDownload"
-            ReferencedContainer = "container:AFResumingDownload.xcodeproj">
+            BuildableName = "DownloadManager.app"
+            BlueprintName = "DownloadManager"
+            ReferencedContainer = "container:DownloadManager.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <AdditionalOptions>
@@ -70,9 +70,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8CCCE4F7160C54B100317D4C"
-            BuildableName = "AFResumingDownload.app"
-            BlueprintName = "AFResumingDownload"
-            ReferencedContainer = "container:AFResumingDownload.xcodeproj">
+            BuildableName = "DownloadManager.app"
+            BlueprintName = "DownloadManager"
+            ReferencedContainer = "container:DownloadManager.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
