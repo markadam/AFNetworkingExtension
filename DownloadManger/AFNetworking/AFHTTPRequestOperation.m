@@ -1,17 +1,17 @@
 // AFHTTPRequestOperation.m
 //
-// Copyright (c) 2011 Gowalla (http://gowalla.com/)
-// 
+// Copyright (c) 2013-2014 AFNetworking (http://afnetworking.com)
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,311 +21,186 @@
 // THE SOFTWARE.
 
 #import "AFHTTPRequestOperation.h"
-#import <objc/runtime.h>
 
-NSString * const kAFNetworkingIncompleteDownloadDirectoryName = @"Incomplete";
-
-NSSet * AFContentTypesFromHTTPHeader(NSString *string) {
-    static NSCharacterSet *_skippedCharacterSet = nil;
+static dispatch_queue_t http_request_operation_processing_queue() {
+    static dispatch_queue_t af_http_request_operation_processing_queue;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _skippedCharacterSet = [NSCharacterSet characterSetWithCharactersInString:@" ,"];
+        af_http_request_operation_processing_queue = dispatch_queue_create("com.alamofire.networking.http-request.processing", DISPATCH_QUEUE_CONCURRENT);
     });
-    
-    if (!string) {
-        return nil;
-    }
-    
-    NSScanner *scanner = [NSScanner scannerWithString:string];
-    scanner.charactersToBeSkipped = _skippedCharacterSet;
-    
-    NSMutableSet *mutableContentTypes = [NSMutableSet set];
-    while (![scanner isAtEnd]) {
-        NSString *contentType = nil;
-        if ([scanner scanUpToString:@";" intoString:&contentType]) {
-            [scanner scanUpToString:@"," intoString:nil];
-        }
-        
-        if (contentType) {
-            [mutableContentTypes addObject:contentType];
-        }
-    }
-    
-    return [NSSet setWithSet:mutableContentTypes];
+
+    return af_http_request_operation_processing_queue;
 }
 
-static void AFSwizzleClassMethodWithClassAndSelectorUsingBlock(Class klass, SEL selector, void *block) {
-    Method originalMethod = class_getClassMethod(klass, selector);
-    IMP implementation = imp_implementationWithBlock((__bridge id)(block));
-    class_replaceMethod(objc_getMetaClass([NSStringFromClass(klass) UTF8String]), selector, implementation, method_getTypeEncoding(originalMethod));
-}
-
-static NSString * AFStringFromIndexSet(NSIndexSet *indexSet) {
-    NSMutableString *string = [NSMutableString string];
-
-    NSRange range = NSMakeRange([indexSet firstIndex], 1);
-    while (range.location != NSNotFound) {
-        NSUInteger nextIndex = [indexSet indexGreaterThanIndex:range.location];
-        while (nextIndex == range.location + range.length) {
-            range.length++;
-            nextIndex = [indexSet indexGreaterThanIndex:nextIndex];
-        }
-
-        if (string.length) {
-            [string appendString:@","];
-        }
-
-        if (range.length == 1) {
-            [string appendFormat:@"%lu", (unsigned long)range.location];
-        } else {
-            NSUInteger firstIndex = range.location;
-            NSUInteger lastIndex = firstIndex + range.length - 1;
-            [string appendFormat:@"%lu-%lu", (unsigned long)firstIndex, (unsigned long)lastIndex];
-        }
-
-        range.location = nextIndex;
-        range.length = 1;
-    }
-
-    return string;
-}
-
-NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
-    static NSString *incompleteDownloadPath;
+static dispatch_group_t http_request_operation_completion_group() {
+    static dispatch_group_t af_http_request_operation_completion_group;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        NSString *tempDirectory = NSTemporaryDirectory();
-        incompleteDownloadPath = [tempDirectory stringByAppendingPathComponent:kAFNetworkingIncompleteDownloadDirectoryName];
-
-        NSError *error = nil;
-        NSFileManager *fileMan = [[NSFileManager alloc] init];
-        if(![fileMan createDirectoryAtPath:incompleteDownloadPath withIntermediateDirectories:YES attributes:nil error:&error]) {
-            NSLog(@"Failed to create incomplete downloads directory at %@", incompleteDownloadPath);
-        }
+        af_http_request_operation_completion_group = dispatch_group_create();
     });
 
-    return incompleteDownloadPath;
+    return af_http_request_operation_completion_group;
 }
 
 #pragma mark -
 
-@interface AFHTTPRequestOperation ()
+@interface AFURLConnectionOperation ()
 @property (readwrite, nonatomic, strong) NSURLRequest *request;
+@property (readwrite, nonatomic, strong) NSURLResponse *response;
+@end
+
+@interface AFHTTPRequestOperation ()
 @property (readwrite, nonatomic, strong) NSHTTPURLResponse *response;
-@property (readwrite, nonatomic, strong) NSError *HTTPError;
-@property (assign) long long totalContentLength;
-@property (assign) long long offsetContentLength;
+@property (readwrite, nonatomic, strong) id responseObject;
+@property (readwrite, nonatomic, strong) NSError *responseSerializationError;
+@property (readwrite, nonatomic, strong) NSRecursiveLock *lock;
 @end
 
 @implementation AFHTTPRequestOperation
-@synthesize HTTPError = _HTTPError;
-@synthesize responseFilePath = _responseFilePath;
-@synthesize successCallbackQueue = _successCallbackQueue;
-@synthesize failureCallbackQueue = _failureCallbackQueue;
-@synthesize totalContentLength = _totalContentLength;
-@synthesize offsetContentLength = _offsetContentLength;
-@dynamic request;
-@dynamic response;
+@dynamic lock;
 
-- (void)dealloc {
-    if (_successCallbackQueue) { 
-        dispatch_release(_successCallbackQueue);
-        _successCallbackQueue = NULL;
+- (instancetype)initWithRequest:(NSURLRequest *)urlRequest {
+    self = [super initWithRequest:urlRequest];
+    if (!self) {
+        return nil;
     }
-    
-    if (_failureCallbackQueue) { 
-        dispatch_release(_failureCallbackQueue); 
-        _failureCallbackQueue = NULL;
+
+    self.responseSerializer = [AFHTTPResponseSerializer serializer];
+
+    return self;
+}
+
+- (void)setResponseSerializer:(AFHTTPResponseSerializer <AFURLResponseSerialization> *)responseSerializer {
+    NSParameterAssert(responseSerializer);
+
+    [self.lock lock];
+    _responseSerializer = responseSerializer;
+    self.responseObject = nil;
+    self.responseSerializationError = nil;
+    [self.lock unlock];
+}
+
+- (id)responseObject {
+    [self.lock lock];
+    if (!_responseObject && [self isFinished] && !self.error) {
+        NSError *error = nil;
+        self.responseObject = [self.responseSerializer responseObjectForResponse:self.response data:self.responseData error:&error];
+        if (error) {
+            self.responseSerializationError = error;
+        }
     }
-    #if !__has_feature(objc_arc)
-        [super dealloc];
-    #endif
+    [self.lock unlock];
+
+    return _responseObject;
 }
 
 - (NSError *)error {
-    if (self.response && !self.HTTPError) {
-        if (![self hasAcceptableStatusCode]) {
-            NSMutableDictionary *userInfo = [NSMutableDictionary dictionary];
-            [userInfo setValue:[NSString stringWithFormat:NSLocalizedString(@"Expected status code in (%@), got %d", nil), AFStringFromIndexSet([[self class] acceptableStatusCodes]), [self.response statusCode]] forKey:NSLocalizedDescriptionKey];
-            [userInfo setValue:[self.request URL] forKey:NSURLErrorFailingURLErrorKey];
-            
-            self.HTTPError = [[NSError alloc] initWithDomain:AFNetworkingErrorDomain code:NSURLErrorBadServerResponse userInfo:userInfo];
-        } else if ([self.responseData length] > 0 && ![self hasAcceptableContentType]) { // Don't invalidate content type if there is no content
-            NSMutableDictionary *userInfo = [NSMutableDictionary dictionary];
-            [userInfo setValue:[NSString stringWithFormat:NSLocalizedString(@"Expected content type %@, got %@", nil), [[self class] acceptableContentTypes], [self.response MIMEType]] forKey:NSLocalizedDescriptionKey];
-            [userInfo setValue:[self.request URL] forKey:NSURLErrorFailingURLErrorKey];
-            
-            self.HTTPError = [[NSError alloc] initWithDomain:AFNetworkingErrorDomain code:NSURLErrorCannotDecodeContentData userInfo:userInfo];
-        }
-    }
-    
-    if (self.HTTPError) {
-        return self.HTTPError;
+    if (_responseSerializationError) {
+        return _responseSerializationError;
     } else {
         return [super error];
     }
 }
 
-- (void)pause {
-    unsigned long long offset = 0; 
-    if ([self.outputStream propertyForKey:NSStreamFileCurrentOffsetKey]) {
-        offset = [[self.outputStream propertyForKey:NSStreamFileCurrentOffsetKey] unsignedLongLongValue];
-    } else {
-        offset = [[self.outputStream propertyForKey:NSStreamDataWrittenToMemoryStreamKey] length];
-    }
-
-    NSMutableURLRequest *mutableURLRequest = [self.request mutableCopy];
-    if ([[self.response allHeaderFields] valueForKey:@"ETag"]) {
-        [mutableURLRequest setValue:[[self.response allHeaderFields] valueForKey:@"ETag"] forHTTPHeaderField:@"If-Range"];
-    }
-    [mutableURLRequest setValue:[NSString stringWithFormat:@"bytes=%llu-", offset] forHTTPHeaderField:@"Range"];
-    self.request = mutableURLRequest;
-    
-    [super pause];
-}
-
-- (BOOL)hasAcceptableStatusCode {
-    return ![[self class] acceptableStatusCodes] || [[[self class] acceptableStatusCodes] containsIndex:[self.response statusCode]];
-}
-
-- (BOOL)hasAcceptableContentType {
-    return ![[self class] acceptableContentTypes] || [[[self class] acceptableContentTypes] containsObject:[self.response MIMEType]];
-}
-
-- (void)setSuccessCallbackQueue:(dispatch_queue_t)successCallbackQueue {
-    if (successCallbackQueue != _successCallbackQueue) {
-        if (_successCallbackQueue) {
-            dispatch_release(_successCallbackQueue);
-            _successCallbackQueue = NULL;
-        }
-
-        if (successCallbackQueue) {
-            dispatch_retain(successCallbackQueue);
-            _successCallbackQueue = successCallbackQueue;
-        }
-    }    
-}
-
-- (void)setFailureCallbackQueue:(dispatch_queue_t)failureCallbackQueue {
-    if (failureCallbackQueue != _failureCallbackQueue) {
-        if (_failureCallbackQueue) {
-            dispatch_release(_failureCallbackQueue);
-            _failureCallbackQueue = NULL;
-        }
-        
-        if (failureCallbackQueue) {
-            dispatch_retain(failureCallbackQueue);
-            _failureCallbackQueue = failureCallbackQueue;
-        }
-    }    
-}
+#pragma mark - AFHTTPRequestOperation
 
 - (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
                               failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
 {
-    // completion block is manually nilled out in AFURLConnectionOperation to break the retain cycle.
+    // completionBlock is manually nilled out in AFURLConnectionOperation to break the retain cycle.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-retain-cycles"
-    self.completionBlock = ^ {
-        if ([self isCancelled]) {
-            return;
+#pragma clang diagnostic ignored "-Wgnu"
+    self.completionBlock = ^{
+        if (self.completionGroup) {
+            dispatch_group_enter(self.completionGroup);
         }
-        
-        if (self.error) {
-            if (failure) {
-                dispatch_async(self.failureCallbackQueue ?: dispatch_get_main_queue(), ^{
-                    failure(self, self.error);
-                });
+
+        dispatch_async(http_request_operation_processing_queue(), ^{
+            if (self.error) {
+                if (failure) {
+                    dispatch_group_async(self.completionGroup ?: http_request_operation_completion_group(), self.completionQueue ?: dispatch_get_main_queue(), ^{
+                        failure(self, self.error);
+                    });
+                }
+            } else {
+                id responseObject = self.responseObject;
+                if (self.error) {
+                    if (failure) {
+                        dispatch_group_async(self.completionGroup ?: http_request_operation_completion_group(), self.completionQueue ?: dispatch_get_main_queue(), ^{
+                            failure(self, self.error);
+                        });
+                    }
+                } else {
+                    if (success) {
+                        dispatch_group_async(self.completionGroup ?: http_request_operation_completion_group(), self.completionQueue ?: dispatch_get_main_queue(), ^{
+                            success(self, responseObject);
+                        });
+                    }
+                }
             }
-        } else {
-            if (success) {
-                dispatch_async(self.successCallbackQueue ?: dispatch_get_main_queue(), ^{
-                    success(self, self.responseData);
-                });
+
+            if (self.completionGroup) {
+                dispatch_group_leave(self.completionGroup);
             }
-        }
+        });
     };
 #pragma clang diagnostic pop
 }
 
-- (void)setResponseFilePath:(NSString *)responseFilePath {
-    if ([self isReady] && responseFilePath != _responseFilePath) {
-        _responseFilePath = responseFilePath;
-        
-        if (responseFilePath) {
-            self.outputStream = [NSOutputStream outputStreamToFileAtPath:responseFilePath append:NO];
-        }else {
-            self.outputStream = [NSOutputStream outputStreamToMemory];
-        }
+#pragma mark - AFURLRequestOperation
+
+- (void)pause {
+    [super pause];
+
+    u_int64_t offset = 0;
+    if ([self.outputStream propertyForKey:NSStreamFileCurrentOffsetKey]) {
+        offset = [(NSNumber *)[self.outputStream propertyForKey:NSStreamFileCurrentOffsetKey] unsignedLongLongValue];
+    } else {
+        offset = [(NSData *)[self.outputStream propertyForKey:NSStreamDataWrittenToMemoryStreamKey] length];
     }
-}
 
-#pragma mark - AFHTTPRequestOperation
-
-+ (NSIndexSet *)acceptableStatusCodes {
-    return [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(200, 100)];
-}
-
-+ (void)addAcceptableStatusCodes:(NSIndexSet *)statusCodes {
-    NSMutableIndexSet *mutableStatusCodes = [[NSMutableIndexSet alloc] initWithIndexSet:[self acceptableStatusCodes]];
-    [mutableStatusCodes addIndexes:statusCodes];
-    AFSwizzleClassMethodWithClassAndSelectorUsingBlock([self class], @selector(acceptableStatusCodes), (__bridge void *)^(id _self) {
-        return mutableStatusCodes;
-    });
-}
-
-+ (NSSet *)acceptableContentTypes {
-    return nil;
-}
-
-+ (void)addAcceptableContentTypes:(NSSet *)contentTypes {
-    NSMutableSet *mutableContentTypes = [[NSMutableSet alloc] initWithSet:[self acceptableContentTypes] copyItems:YES];
-    [mutableContentTypes unionSet:contentTypes];
-    AFSwizzleClassMethodWithClassAndSelectorUsingBlock([self class], @selector(acceptableContentTypes), (__bridge void *)^(id _self) {
-        return mutableContentTypes;
-    });
-}
-
-+ (BOOL)canProcessRequest:(NSURLRequest *)request {
-    if ([[self class] isEqual:[AFHTTPRequestOperation class]]) {
-        return YES;
+    NSMutableURLRequest *mutableURLRequest = [self.request mutableCopy];
+    if ([self.response respondsToSelector:@selector(allHeaderFields)] && [[self.response allHeaderFields] valueForKey:@"ETag"]) {
+        [mutableURLRequest setValue:[[self.response allHeaderFields] valueForKey:@"ETag"] forHTTPHeaderField:@"If-Range"];
     }
-    
-    return [[self acceptableContentTypes] intersectsSet:AFContentTypesFromHTTPHeader([request valueForHTTPHeaderField:@"Accept"])];
+    [mutableURLRequest setValue:[NSString stringWithFormat:@"bytes=%llu-", offset] forHTTPHeaderField:@"Range"];
+    self.request = mutableURLRequest;
 }
 
-#pragma mark - NSURLConnectionDelegate
+#pragma mark - NSSecureCoding
 
-- (void)connection:(NSURLConnection *)connection 
-didReceiveResponse:(NSURLResponse *)response 
-{
-    self.response = (NSHTTPURLResponse *)response;
-    
-    // 206 = Partial Content.
-    long long totalContentLength = self.response.expectedContentLength;
-    long long fileOffset = 0;
-    if ([self.response statusCode] != 206) {
-        if ([self.outputStream propertyForKey:NSStreamFileCurrentOffsetKey]) {
-            [self.outputStream setProperty:[NSNumber numberWithInteger:0] forKey:NSStreamFileCurrentOffsetKey];
-        } else {
-            if ([[self.outputStream propertyForKey:NSStreamDataWrittenToMemoryStreamKey] length] > 0) {
-                self.outputStream = [NSOutputStream outputStreamToMemory];
-            }
-        }
-    }else {
-        NSString *contentRange = [self.response.allHeaderFields valueForKey:@"Content-Range"];
-        if ([contentRange hasPrefix:@"bytes"]) {
-            NSArray *bytes = [contentRange componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@" -/"]];
-            if ([bytes count] == 4) {
-                fileOffset = [[bytes objectAtIndex:1] longLongValue];
-                totalContentLength = [[bytes objectAtIndex:2] longLongValue] ?: -1; // if this is *, it's converted to 0, but -1 is default.
-            }
-        }
++ (BOOL)supportsSecureCoding {
+    return YES;
+}
 
+- (id)initWithCoder:(NSCoder *)decoder {
+    self = [super initWithCoder:decoder];
+    if (!self) {
+        return nil;
     }
-    self.offsetContentLength = MAX(fileOffset, 0);
-    self.totalContentLength = totalContentLength;
-    [self.outputStream open];
+
+    self.responseSerializer = [decoder decodeObjectOfClass:[AFHTTPResponseSerializer class] forKey:NSStringFromSelector(@selector(responseSerializer))];
+
+    return self;
+}
+
+- (void)encodeWithCoder:(NSCoder *)coder {
+    [super encodeWithCoder:coder];
+
+    [coder encodeObject:self.responseSerializer forKey:NSStringFromSelector(@selector(responseSerializer))];
+}
+
+#pragma mark - NSCopying
+
+- (id)copyWithZone:(NSZone *)zone {
+    AFHTTPRequestOperation *operation = [super copyWithZone:zone];
+
+    operation.responseSerializer = [self.responseSerializer copyWithZone:zone];
+    operation.completionQueue = self.completionQueue;
+    operation.completionGroup = self.completionGroup;
+
+    return operation;
 }
 
 @end

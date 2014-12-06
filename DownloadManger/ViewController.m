@@ -49,7 +49,28 @@
     
     downloadURL  = [NSMutableArray array];
    // [downloadURL addObject:@"http://download.wavetlan.com/SVV/Media/HTTP/BlackBerry.mov"];
-   [downloadURL addObject:@"http://download.wavetlan.com/SVV/Media/HTTP/H264/Talkinghead_Media/H264_test1_Talkinghead_mp4_480x360.mp4"];
+    NSMutableDictionary *dict = [[NSMutableDictionary alloc]init];
+    [dict setObject:@"http://www.msy.com.au/Parts/PARTS.pdf" forKey:@"URL"];
+    [dict setObject:@"432423dsfdsf" forKey:@"ID"];
+//    [downloadURL addObject:@"http://www.msy.com.au/Parts/PARTS.pdf"];
+//    [downloadURL addObject:@"http://www.msy.com.au/Parts/MicrosoftFlyer.pdf"];
+//    [downloadURL addObject:@"http://www.msy.com.au/Parts/Acertemp.pdf"];
+//    [downloadURL addObject:@"http://www.msy.com.au/Parts/adelaide1.pdf"];
+//    [downloadURL addObject:@"http://www.msy.com.au/Parts/adelaide2.pdf"];
+//    [downloadURL addObject:@"http://www.msy.com.au/Parts/notebook.pdf"];
+//    [downloadURL addObject:@"http://www.msy.com.au/Parts/notebook1.pdf"];
+//    [downloadURL addObject:@"http://www.msy.com.au/Parts/notebook2.pdf"];
+//    [downloadURL addObject:@"http://www.msy.com.au/Parts/ultimo1.pdf"];
+    [downloadURL addObject:dict];
+    dict = [[NSMutableDictionary alloc]init];
+    [dict setObject:@"http://www.altraliterature.com/pdfs/PR_2012_Q3.pdf" forKey:@"URL"];
+    [dict setObject:@"dsgdsfgdfg" forKey:@"ID"];
+    [downloadURL addObject:dict];
+    
+//    dict = [[NSMutableDictionary alloc]init];
+//    [dict setObject:@"http://www.msy.com.au/Parts/Acertemp.pdf" forKey:@"URL"];
+//    [dict setObject:@"dsfv456465" forKey:@"ID"];
+//    [downloadURL addObject:dict];
   //  [downloadURL addObject:@"http://192.168.4.43/208_hd_introducing_cloudkit.mov"];
 //    [downloadURL addObject:@"http://192.168.4.43/224_hd_core_os_ios_application_architectural_patterns.mov"];
 //    [downloadURL addObject:@"http://192.168.4.43/225_hd_whats_new_in_core_data.mov"];
@@ -74,114 +95,23 @@
    [[DownloadManager sharedInstance]setProgressiveDownloadProgressBlock:downloadURL completion:^(float percentDone,NSString *current,NSString *total){
         self.progressView.progress = percentDone/100;
         self.progressLabel.text = [NSString stringWithFormat:@"%.0f%%",percentDone];
-        self.currentSizeLabel.text = current;
-        self.totalSizeLabel.text = total;
+        self.currentSizeLabel.text = [NSString stringWithFormat:@"Completed %@ out of %@",current,total];
+//        self.totalSizeLabel.text = total;
     }];
     [[DownloadManager sharedInstance] setCompletionBlockWithSuccess:^(NSMutableArray *locaPaths)
      {
          NSLog(@"%@",locaPaths);
      }];
+    [[DownloadManager sharedInstance] setCompletionBlockWithError:^(NSMutableArray *locaPaths)
+     {
+         NSLog(@"%@",locaPaths);
+     }];
+
 }
-//
-//    [[UIApplication sharedApplication] setNetworkActivityIndicatorVisible:YES];
-//    
-//    dispatch_group_t group = dispatch_group_create();
-//    NSDate *startDate = [NSDate date];
-//    NSDateFormatter *dateformate = [[NSDateFormatter alloc]init];
-//    [dateformate setDateFormat:@"mm.ss.sss"];
-//    NSLog(@"Start Date ==%@==",[dateformate stringFromDate: startDate]);
-//    NSMutableArray *downloadProgress = [NSMutableArray array];
-//   
-//    NSInteger count = downloadURL.count;
-//    for (int k=0;k<count;k++)
-//    {
-//        NSString *urlStr;
-//        NSString *path;
-//        NSString *fileName;
-//        NSString *documentPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES) lastObject];
-//        
-//        urlStr = [downloadURL objectAtIndex:k];
-//        NSArray *array = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:documentPath error:nil];
-//        
-//        fileName = [NSString stringWithFormat:@"%@.%@", [AFDownloadRequestOperation md5StringForString:urlStr],[[urlStr lastPathComponent] pathExtension]];
-//        NSLog(@"%@",array);
-//        NSPredicate * predicate = [NSPredicate predicateWithFormat:@"SELF == %@", fileName];
-//        NSArray * filteredArray = [array filteredArrayUsingPredicate:predicate];
-//        dispatch_group_enter(group);
-//        path = [NSString stringWithFormat:@"%@/%@",documentPath, fileName];
-//        [downloadProgress insertObject:[NSString stringWithFormat:@"0.0"] atIndex:k];
-//
-//        if (filteredArray.count == 0)
-//        {
-//
-//            
-//            NSURL *url = [NSURL URLWithString:urlStr];
-//            NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url cachePolicy:NSURLRequestUseProtocolCachePolicy timeoutInterval:3600];
-//            
-//            
-//            AFDownloadRequestOperation *operation = [[AFDownloadRequestOperation alloc] initWithRequest:request targetPath:path shouldResume:YES];
-//            //        operation.outputStream = [NSOutputStream outputStreamToFileAtPath:path append:YES];
-//            //        [operation setTargetPath:path];
-//#pragma clang diagnostic push
-//#pragma clang diagnostic ignored "-Warc-retain-cycles"
-//            [operation setDownloadFileIndex:[NSString stringWithFormat:@"%i",k]];
-//            
-//            [operation setCompletionBlockWithSuccess:^(AFHTTPRequestOperation *operation, id responseObject) {
-//                NSLog(@"Successfully downloaded file to %@", path);
-//                [downloadURL replaceObjectAtIndex:k withObject:path];
-//                dispatch_group_leave(group);
-//                
-//            } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
-//                NSLog(@"Error: %@ ==%i", error,k);
-//                dispatch_group_leave(group);
-//            }];
-//            [operation setProgressiveDownloadProgressBlock:^(NSInteger bytesRead, long long totalBytesRead, long long totalBytesExpected, long long totalBytesReadForFile, long long totalBytesExpectedToReadForFile) {
-//                float percentDone = totalBytesReadForFile/(float)totalBytesExpectedToReadForFile;
-//                [downloadProgress replaceObjectAtIndex:[operation.downloadFileIndex intValue] withObject:[NSString stringWithFormat:@"%.0f",percentDone*100]];
-//                NSNumber * sum = [downloadProgress valueForKeyPath:@"@sum.self"];
-//                percentDone = ([sum floatValue]) / count;
-//                self.progressView.progress = percentDone/100;
-//                self.progressLabel.text = [NSString stringWithFormat:@"%.0f%%",percentDone];
-//                self.currentSizeLabel.text = [NSString stringWithFormat:@"CUR : %lli M",(totalBytesReadForFile*count)/1024/1024];
-//                self.totalSizeLabel.text = [NSString stringWithFormat:@"TOTAL : %lli M",(totalBytesExpectedToReadForFile*count)/1024/1024];
-//                
-//                //  NSLog(@"--%i----%f",k,percentDone);
-//                //            NSLog(@"Operation%i: bytesRead: %d", k, bytesRead);
-//                //            NSLog(@"Operation%i: totalBytesRead: %lld", k, totalBytesRead);
-//                //            NSLog(@"Operation%i: totalBytesExpected: %lld", k, totalBytesExpected);
-//                //            NSLog(@"Operation%i: totalBytesReadForFile: %lld", k, totalBytesReadForFile);
-//                //            NSLog(@"Operation%i: totalBytesExpectedToReadForFile: %lld", k ,totalBytesExpectedToReadForFile);
-//                
-//                NSLog(@"Download Progress %@",downloadProgress);
-//                
-//            }];
-//            
-//            [operationQueue addOperation:operation];
-//        }else{
-//            [downloadURL replaceObjectAtIndex:k withObject:path];
-//            [downloadProgress replaceObjectAtIndex:k withObject:[NSString stringWithFormat:@"100"]];
-//            NSNumber * sum = [downloadProgress valueForKeyPath:@"@sum.self"];
-//           float percentDone = ([sum floatValue]) / count;
-//            self.progressView.progress = percentDone/100;
-//            self.progressLabel.text = [NSString stringWithFormat:@"%.0f%%",percentDone];
-//            dispatch_group_leave(group);
-//        }
-//    }
-//    // Here we wait for all the requests to finish
-//    dispatch_group_notify(group, dispatch_get_main_queue(), ^{
-//        // run code when all files are downloaded
-//        [[UIApplication sharedApplication] setNetworkActivityIndicatorVisible:NO];
-//        NSLog(@"End Date ==%@==*==%.2f==",[dateformate stringFromDate:[NSDate date]],[[NSDate date] timeIntervalSinceDate:startDate]/60);
-//        
-//        NSLog(@"Download URL %@",downloadURL);
-//    });
-//    
-//}
+
 
 - (IBAction)beginPlay:(id)sender
 {
-//    AudioPlayer *player = [AudioPlayer sharePlayer];
-//    [player playWithDataSourceType:DataSourceTypeLocal withURLString:MUSICFile];
     MPMoviePlayerViewController *MPC = [[MPMoviePlayerViewController alloc] initWithContentURL:[NSURL fileURLWithPath:[downloadURL objectAtIndex:0]]];
     MPMoviePlayerController *moviePlayer = MPC.moviePlayer;
     MPC.moviePlayer.repeatMode = MPMovieRepeatModeNone;

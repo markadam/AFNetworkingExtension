@@ -21,6 +21,7 @@
     NSMutableArray *_downloadURLs;
     void (^_getProgressiveDownloadProgressBlock)(float percentDone,NSString * current,NSString *total);
     void (^_downloadCompletionBlockWithSuccess)(NSMutableArray * localPaths);
+    void (^_downloadFailedBlockWithSuccess)(NSMutableArray * localPaths);
 }
 @property (nonatomic, strong) NSMutableArray *downloadURLs;
 @property (nonatomic, assign)  id <DowloadManagerDelegate> delegate;
@@ -32,5 +33,8 @@
 # pragma mark - Block Methods
 - (void) setProgressiveDownloadProgressBlock:(NSMutableArray *)downloadURLs completion:(void(^)(float,NSString*,NSString*))block;
 - (void) setCompletionBlockWithSuccess:(void(^)(NSMutableArray *))block;
-
+- (void) setCompletionBlockWithError:(void(^)(NSMutableArray *))block;
+-(void)pause;
+-(void)resume;
+-(void)cancelAllOperations;
 @end
